@@ -1,0 +1,1011 @@
+<!doctype html>
+<html lang="en" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PrithviAI Dashboard - Accurate Live Vision</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      box-sizing: border-box;
+    }
+    
+    * {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+    
+    @keyframes scan-line {
+      0% { top: 0; }
+      100% { top: 100%; }
+    }
+    
+    @keyframes pulse-ring {
+      0% { transform: scale(1); opacity: 1; }
+      100% { transform: scale(1.5); opacity: 0; }
+    }
+    
+    .gradient-bg {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    }
+    
+    .glass-card {
+      background: rgba(30, 41, 59, 0.6);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    
+    .glass-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(59, 130, 246, 0.2);
+      transition: all 0.3s ease;
+    }
+    
+    .scan-effect {
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .scan-effect.scanning::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, #3b82f6, transparent);
+      animation: scan-line 2s linear infinite;
+      box-shadow: 0 0 10px rgba(59, 130, 246, 0.6);
+    }
+    
+    .progress-bar {
+      transition: width 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 10px;
+    }
+    
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: rgba(59, 130, 246, 0.1);
+      border-radius: 5px;
+    }
+    
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #3b82f6;
+      border-radius: 5px;
+    }
+    
+    #video-feed {
+      transform: scaleX(-1);
+    }
+    
+    .camera-controls {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      display: flex;
+      gap: 12px;
+    }
+    
+    .camera-btn {
+      background: rgba(59, 130, 246, 0.9);
+      backdrop-filter: blur(8px);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      padding: 12px 20px;
+      border-radius: 12px;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    
+    .camera-btn:hover {
+      background: rgba(59, 130, 246, 1);
+      transform: scale(1.05);
+    }
+    
+    .camera-btn:active {
+      transform: scale(0.95);
+    }
+    
+    .recording-indicator {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      z-index: 10;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      background: rgba(239, 68, 68, 0.9);
+      padding: 8px 16px;
+      border-radius: 20px;
+      color: white;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    
+    .recording-indicator.active {
+      display: flex;
+    }
+    
+    .pulse-dot {
+      width: 12px;
+      height: 12px;
+      background: white;
+      border-radius: 50%;
+      position: relative;
+    }
+    
+    .pulse-dot::before {
+      content: '';
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background: white;
+      border-radius: 50%;
+      animation: pulse-ring 1.5s ease-out infinite;
+    }
+
+    .loading-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(15, 23, 42, 0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      gap: 16px;
+    }
+
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid rgba(59, 130, 246, 0.3);
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+ </head>
+ <body class="h-full">
+  <div id="app-container" class="w-full h-full gradient-bg overflow-auto custom-scrollbar">
+   <div class="min-h-full p-4 md:p-8">
+    <!-- Header -->
+    <header class="text-center mb-10">
+     <h1 class="text-4xl md:text-6xl font-bold text-blue-400 mb-3">PrithviAI Live</h1>
+     <p class="text-lg md:text-2xl text-slate-300 font-medium mb-6 px-4">Real-Time Accurate AI Vision for Sustainability</p>
+     <div class="flex flex-wrap justify-center gap-3 mt-6">
+      <span class="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-full">🤖 TensorFlow AI</span>
+      <span class="px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-full">🎯 Accurate Detection</span>
+      <span class="px-4 py-2 bg-purple-600 text-white text-sm font-semibold rounded-full">📹 Live Camera</span>
+     </div>
+    </header>
+
+    <!-- Impact Counters -->
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+     <div class="glass-card rounded-3xl p-8 text-center">
+      <div class="text-5xl mb-3">💧</div>
+      <div id="liters-saved" class="text-4xl md:text-5xl font-bold text-blue-400 mb-2">0</div>
+      <div class="text-slate-300 text-base font-semibold">Liters Saved</div>
+     </div>
+     <div class="glass-card rounded-3xl p-8 text-center">
+      <div class="text-5xl mb-3">⚡</div>
+      <div id="kwh-balanced" class="text-4xl md:text-5xl font-bold text-yellow-400 mb-2">0</div>
+      <div class="text-slate-300 text-base font-semibold">kWh Balanced</div>
+     </div>
+     <div class="glass-card rounded-3xl p-8 text-center">
+      <div class="text-5xl mb-3">🌿</div>
+      <div id="emissions-reduced" class="text-4xl md:text-5xl font-bold text-green-400 mb-2">0</div>
+      <div class="text-slate-300 text-base font-semibold">kg CO₂ Reduced</div>
+     </div>
+    </section>
+
+    <!-- Live Vision AI Analysis -->
+    <section class="glass-card rounded-3xl p-8 mb-8">
+     <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-3">
+      <span class="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-2xl">🎯</span>
+      <span>Accurate Vision AI Analysis</span>
+     </h2>
+     <div class="grid md:grid-cols-2 gap-8">
+      <!-- Live Camera Feed -->
+      <div>
+       <div class="relative w-full h-56 md:h-80 bg-slate-900 rounded-2xl overflow-hidden scan-effect" id="camera-container">
+        <div id="model-loading" class="loading-overlay">
+         <div class="spinner"></div>
+         <span class="text-blue-300 font-semibold text-lg">Loading AI Model...</span>
+         <span class="text-slate-400 text-sm">Initializing TensorFlow.js</span>
+        </div>
+
+        <div class="recording-indicator" id="recording-indicator">
+         <div class="pulse-dot"></div>
+         <span>LIVE ANALYZING</span>
+        </div>
+        
+        <video id="video-feed" class="w-full h-full object-cover" autoplay playsinline></video>
+        <canvas id="detection-canvas" class="absolute top-0 left-0 w-full h-full pointer-events-none"></canvas>
+        
+        <div id="camera-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-blue-300 bg-slate-800">
+         <svg class="w-20 h-20 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+         </svg>
+         <span class="font-semibold text-xl">📹 Start AI Camera</span>
+         <span class="text-sm text-slate-400 mt-2">Powered by TensorFlow.js</span>
+        </div>
+        
+        <div class="camera-controls">
+         <button id="start-camera-btn" class="camera-btn">
+          🎥 Start Camera
+         </button>
+         <button id="switch-camera-btn" class="camera-btn" style="display: none;">
+          🔄 Switch Camera
+         </button>
+         <button id="stop-camera-btn" class="camera-btn" style="display: none;">
+          ⏹️ Stop
+         </button>
+        </div>
+       </div>
+       
+       <button id="analyze-btn" class="w-full mt-5 py-4 bg-blue-600 text-white font-bold text-lg rounded-2xl hover:bg-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3" disabled>
+        <span id="analyze-text">🔍 Start Live Analysis</span>
+        <div id="analyze-spinner" class="hidden w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin"></div>
+       </button>
+
+       <!-- Detection Status -->
+       <div id="detection-status" class="mt-4 p-4 bg-slate-800/60 rounded-xl border border-slate-700">
+        <div class="flex items-center gap-3 mb-2">
+         <span class="text-green-400 text-xl">🎯</span>
+         <span class="text-slate-300 font-semibold">Detection Status</span>
+        </div>
+        <div id="detected-objects" class="text-slate-400 text-sm">
+         Waiting for camera...
+        </div>
+       </div>
+      </div>
+
+      <!-- AI Results -->
+      <div id="ai-results" class="space-y-5 opacity-50">
+       <h3 class="text-slate-300 font-bold text-lg">🤖 Live Detection Results</h3>
+       <div class="space-y-4">
+        <div class="bg-red-900/30 p-4 rounded-xl border-l-4 border-red-500">
+         <div class="flex justify-between text-sm mb-2">
+          <span class="text-gray-200 font-semibold">🗑️ Waste Detected</span>
+          <span id="waste-percent" class="text-red-300 font-bold text-lg">--%</span>
+         </div>
+         <div class="h-3 bg-gray-800 rounded-full overflow-hidden">
+          <div id="waste-bar" class="h-full bg-red-500 progress-bar" style="width: 0%"></div>
+         </div>
+        </div>
+        <div class="bg-blue-900/30 p-4 rounded-xl border-l-4 border-blue-500">
+         <div class="flex justify-between text-sm mb-2">
+          <span class="text-gray-200 font-semibold">💧 Water Loss</span>
+          <span id="water-loss" class="text-blue-300 font-bold text-lg">-- L/day</span>
+         </div>
+         <div class="h-3 bg-gray-800 rounded-full overflow-hidden">
+          <div id="water-bar" class="h-full bg-blue-500 progress-bar" style="width: 0%"></div>
+         </div>
+        </div>
+        <div class="bg-yellow-900/30 p-4 rounded-xl border-l-4 border-yellow-500">
+         <div class="flex justify-between text-sm mb-2">
+          <span class="text-gray-200 font-semibold">⚡ Energy Waste</span>
+          <span id="energy-waste" class="text-yellow-300 font-bold text-lg">-- kWh/day</span>
+         </div>
+         <div class="h-3 bg-gray-800 rounded-full overflow-hidden">
+          <div id="energy-bar" class="h-full bg-yellow-500 progress-bar" style="width: 0%"></div>
+         </div>
+        </div>
+        <div class="bg-green-900/30 p-4 rounded-xl border-l-4 border-green-500">
+         <div class="flex justify-between text-sm mb-2">
+          <span class="text-gray-200 font-semibold">🌫️ CO₂ Impact</span>
+          <span id="co2-impact" class="text-green-300 font-bold text-lg">-- kg/day</span>
+         </div>
+         <div class="h-3 bg-gray-800 rounded-full overflow-hidden">
+          <div id="co2-bar" class="h-full bg-green-500 progress-bar" style="width: 0%"></div>
+         </div>
+        </div>
+       </div>
+      </div>
+     </div>
+    </section>
+
+    <!-- Forecast & Optimization Grid -->
+    <div class="grid md:grid-cols-2 gap-8 mb-8">
+     <!-- Forecast Section -->
+     <section class="glass-card rounded-3xl p-8">
+      <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-3">
+       <span class="w-12 h-12 bg-purple-600 rounded-2xl flex items-center justify-center text-2xl">📊</span>
+       <span>AI Risk Forecast</span>
+      </h2>
+      <button id="forecast-btn" class="w-full py-4 bg-purple-600 text-white font-bold text-lg rounded-2xl hover:bg-purple-500 transition-all mb-6 disabled:opacity-50" disabled>
+       📈 Run Forecast
+      </button>
+      <div id="forecast-results" class="space-y-4 opacity-50">
+       <div class="flex items-center gap-4 p-5 bg-slate-800/60 rounded-2xl">
+        <div id="risk-indicator" class="w-16 h-16 rounded-full bg-gray-600 flex items-center justify-center text-3xl">❓</div>
+        <div>
+         <div class="text-sm text-gray-400 font-medium">7-Day Risk Level</div>
+         <div id="risk-text" class="text-xl font-bold text-gray-300">Awaiting Analysis</div>
+        </div>
+       </div>
+       <div class="grid grid-cols-3 gap-3 text-center">
+        <div class="p-4 bg-red-500/20 rounded-2xl">
+         <div id="waste-forecast" class="text-2xl font-bold text-red-300 mb-1">--</div>
+         <div class="text-xs text-slate-300">Waste Risk</div>
+        </div>
+        <div class="p-4 bg-blue-500/20 rounded-2xl">
+         <div id="water-forecast" class="text-2xl font-bold text-blue-300 mb-1">--</div>
+         <div class="text-xs text-slate-300">Water Risk</div>
+        </div>
+        <div class="p-4 bg-yellow-500/20 rounded-2xl">
+         <div id="energy-forecast" class="text-2xl font-bold text-yellow-300 mb-1">--</div>
+         <div class="text-xs text-slate-300">Energy Risk</div>
+        </div>
+       </div>
+      </div>
+     </section>
+
+     <!-- Optimization Section -->
+     <section class="glass-card rounded-3xl p-8">
+      <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-3">
+       <span class="w-12 h-12 bg-green-600 rounded-2xl flex items-center justify-center text-2xl">🧠</span>
+       <span>AI Optimization</span>
+      </h2>
+      <button id="optimize-btn" class="w-full py-4 bg-green-600 text-white font-bold text-lg rounded-2xl hover:bg-green-500 transition-all mb-6 disabled:opacity-50" disabled>
+       🎯 Optimize with AI
+      </button>
+      <div id="optimization-results" class="space-y-3 opacity-50">
+       <div id="opt-water" class="flex items-start gap-3 p-4 bg-blue-500/10 rounded-2xl">
+        <span class="text-blue-400 text-2xl">💧</span>
+        <span class="text-slate-300 text-sm">Water optimization pending...</span>
+       </div>
+       <div id="opt-energy" class="flex items-start gap-3 p-4 bg-yellow-500/10 rounded-2xl">
+        <span class="text-yellow-400 text-2xl">⚡</span>
+        <span class="text-slate-300 text-sm">Energy optimization pending...</span>
+       </div>
+       <div id="opt-waste" class="flex items-start gap-3 p-4 bg-red-500/10 rounded-2xl">
+        <span class="text-red-400 text-2xl">🗑️</span>
+        <span class="text-slate-300 text-sm">Waste optimization pending...</span>
+       </div>
+      </div>
+     </section>
+    </div>
+
+    <!-- Action Plan Generator -->
+    <section class="glass-card rounded-3xl p-8 mb-8">
+     <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-3">
+      <span class="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-2xl">📋</span>
+      <span>Daily Sustainability Action Plan</span>
+     </h2>
+     <div class="flex flex-wrap gap-4 mb-6">
+      <select id="location-type" class="px-6 py-3 bg-slate-800 text-white font-semibold rounded-2xl border-2 border-blue-500/30 focus:border-blue-500 focus:outline-none">
+       <option value="school">🏫 School</option>
+       <option value="ward">🏘️ Ward/Colony</option>
+       <option value="office">🏢 Office Complex</option>
+      </select>
+      <button id="generate-plan-btn" class="flex-1 min-w-[250px] py-3 bg-blue-600 text-white font-bold text-lg rounded-2xl hover:bg-blue-500 transition-all disabled:opacity-50" disabled>
+       ✨ Generate Action Plan
+      </button>
+     </div>
+     <div id="action-plan-container" class="bg-slate-800/60 rounded-2xl p-6 min-h-[250px] max-h-[350px] overflow-y-auto custom-scrollbar border border-slate-700">
+      <div id="action-plan-content" class="text-slate-300 text-sm">
+       <div class="flex items-center justify-center h-40 flex-col gap-3">
+        <div class="text-6xl">📝</div>
+        <span class="text-lg font-medium text-center">Start camera and analyze to generate your action plan</span>
+       </div>
+      </div>
+     </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="text-center py-8 border-t border-slate-700">
+     <span class="text-slate-400 font-semibold text-lg block mb-2">PrithviAI – Accurate AI Vision for Sustainability</span>
+     <p class="text-slate-500 text-sm">Powered by TensorFlow.js • Real object detection 🎯</p>
+    </footer>
+   </div>
+  </div>
+
+  <script>
+    // AI Model and State
+    let model = null;
+    let stream = null;
+    let currentFacingMode = 'environment';
+    let isAnalyzing = false;
+    let analysisInterval = null;
+    let analysisData = null;
+    let counters = { liters: 0, kwh: 0, emissions: 0 };
+    let detectionAnimationFrame = null;
+    let lastDetections = [];
+
+    // Sustainability-related object mappings
+    const sustainabilityObjects = {
+      // Waste-related
+      'bottle': { category: 'waste', impact: 'high', emoji: '🍾', label: 'Plastic Bottle' },
+      'cup': { category: 'waste', impact: 'medium', emoji: '🥤', label: 'Disposable Cup' },
+      'fork': { category: 'waste', impact: 'low', emoji: '🍴', label: 'Utensil' },
+      'knife': { category: 'waste', impact: 'low', emoji: '🔪', label: 'Utensil' },
+      'spoon': { category: 'waste', impact: 'low', emoji: '🥄', label: 'Utensil' },
+      'bowl': { category: 'waste', impact: 'low', emoji: '�碗', label: 'Container' },
+      'banana': { category: 'waste', impact: 'medium', emoji: '🍌', label: 'Organic Waste' },
+      'apple': { category: 'waste', impact: 'medium', emoji: '🍎', label: 'Organic Waste' },
+      'orange': { category: 'waste', impact: 'medium', emoji: '🍊', label: 'Organic Waste' },
+      'pizza': { category: 'waste', impact: 'medium', emoji: '🍕', label: 'Food Waste' },
+      'donut': { category: 'waste', impact: 'medium', emoji: '🍩', label: 'Food Waste' },
+      'cake': { category: 'waste', impact: 'medium', emoji: '🍰', label: 'Food Waste' },
+      'backpack': { category: 'waste', impact: 'low', emoji: '🎒', label: 'Bag' },
+      'handbag': { category: 'waste', impact: 'low', emoji: '👜', label: 'Bag' },
+      'suitcase': { category: 'waste', impact: 'low', emoji: '🧳', label: 'Luggage' },
+      
+      // Energy-related
+      'laptop': { category: 'energy', impact: 'high', emoji: '💻', label: 'Laptop Running' },
+      'tv': { category: 'energy', impact: 'high', emoji: '📺', label: 'TV On' },
+      'cell phone': { category: 'energy', impact: 'medium', emoji: '📱', label: 'Phone Charging' },
+      'keyboard': { category: 'energy', impact: 'low', emoji: '⌨️', label: 'Device Active' },
+      'mouse': { category: 'energy', impact: 'low', emoji: '🖱️', label: 'Device Active' },
+      'remote': { category: 'energy', impact: 'low', emoji: '📡', label: 'Remote Control' },
+      'microwave': { category: 'energy', impact: 'high', emoji: '📟', label: 'Microwave' },
+      'oven': { category: 'energy', impact: 'high', emoji: '🔥', label: 'Oven Running' },
+      'toaster': { category: 'energy', impact: 'medium', emoji: '🍞', label: 'Toaster' },
+      'refrigerator': { category: 'energy', impact: 'high', emoji: '🧊', label: 'Refrigerator' },
+      
+      // Water-related
+      'sink': { category: 'water', impact: 'high', emoji: '🚰', label: 'Sink/Tap' },
+      'toilet': { category: 'water', impact: 'high', emoji: '🚽', label: 'Toilet' },
+      'wine glass': { category: 'water', impact: 'low', emoji: '🍷', label: 'Glass' },
+      
+      // General items
+      'person': { category: 'neutral', impact: 'low', emoji: '👤', label: 'Person' },
+      'chair': { category: 'neutral', impact: 'low', emoji: '💺', label: 'Furniture' },
+      'couch': { category: 'neutral', impact: 'low', emoji: '🛋️', label: 'Furniture' },
+      'bed': { category: 'neutral', impact: 'low', emoji: '🛏️', label: 'Furniture' },
+      'dining table': { category: 'neutral', impact: 'low', emoji: '🍽️', label: 'Table' },
+      'potted plant': { category: 'positive', impact: 'low', emoji: '🌱', label: 'Plant' },
+      'book': { category: 'neutral', impact: 'low', emoji: '📚', label: 'Book' },
+      'clock': { category: 'neutral', impact: 'low', emoji: '⏰', label: 'Clock' },
+      'vase': { category: 'neutral', impact: 'low', emoji: '🏺', label: 'Vase' },
+      'scissors': { category: 'neutral', impact: 'low', emoji: '✂️', label: 'Scissors' },
+      'teddy bear': { category: 'neutral', impact: 'low', emoji: '🧸', label: 'Toy' },
+      'hair drier': { category: 'energy', impact: 'medium', emoji: '💨', label: 'Hair Dryer' },
+      'toothbrush': { category: 'neutral', impact: 'low', emoji: '🪥', label: 'Toothbrush' }
+    };
+
+    // DOM Elements
+    const videoFeed = document.getElementById('video-feed');
+    const cameraPlaceholder = document.getElementById('camera-placeholder');
+    const cameraContainer = document.getElementById('camera-container');
+    const startCameraBtn = document.getElementById('start-camera-btn');
+    const switchCameraBtn = document.getElementById('switch-camera-btn');
+    const stopCameraBtn = document.getElementById('stop-camera-btn');
+    const analyzeBtn = document.getElementById('analyze-btn');
+    const recordingIndicator = document.getElementById('recording-indicator');
+    const modelLoading = document.getElementById('model-loading');
+    const detectedObjectsEl = document.getElementById('detected-objects');
+
+    // Load TensorFlow Model
+    async function loadModel() {
+      try {
+        console.log('Loading COCO-SSD model...');
+        model = await cocoSsd.load();
+        console.log('Model loaded successfully!');
+        modelLoading.style.display = 'none';
+      } catch (error) {
+        console.error('Error loading model:', error);
+        modelLoading.innerHTML = `
+          <span class="text-red-400 font-semibold">Failed to load AI model</span>
+          <span class="text-slate-400 text-sm">Please refresh the page</span>
+        `;
+      }
+    }
+
+    // Start Camera
+    async function startCamera() {
+      try {
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+        }
+
+        const constraints = {
+          video: {
+            facingMode: currentFacingMode,
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        };
+
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        videoFeed.srcObject = stream;
+        
+        cameraPlaceholder.style.display = 'none';
+        videoFeed.style.display = 'block';
+        
+        startCameraBtn.style.display = 'none';
+        switchCameraBtn.style.display = 'inline-block';
+        stopCameraBtn.style.display = 'inline-block';
+        analyzeBtn.disabled = false;
+
+        if (currentFacingMode === 'user') {
+          videoFeed.style.transform = 'scaleX(-1)';
+        } else {
+          videoFeed.style.transform = 'scaleX(1)';
+        }
+
+        detectedObjectsEl.textContent = 'Camera ready. Start analysis to detect objects.';
+
+      } catch (error) {
+        console.error('Error accessing camera:', error);
+        alert('Camera access denied. Please check permissions.');
+      }
+    }
+
+    // Switch Camera
+    async function switchCamera() {
+      currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+      await startCamera();
+    }
+
+    // Stop Camera
+    function stopCamera() {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }
+      
+      videoFeed.style.display = 'none';
+      cameraPlaceholder.style.display = 'flex';
+      
+      startCameraBtn.style.display = 'inline-block';
+      switchCameraBtn.style.display = 'none';
+      stopCameraBtn.style.display = 'none';
+      
+      if (isAnalyzing) {
+        stopAnalysis();
+      }
+      
+      analyzeBtn.disabled = true;
+      const canvas = document.getElementById('detection-canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      detectedObjectsEl.textContent = 'Waiting for camera...';
+    }
+
+    // Real-time Object Detection
+    async function detectObjects() {
+      if (!model || !isAnalyzing || !videoFeed.videoWidth) {
+        return;
+      }
+
+      try {
+        const predictions = await model.detect(videoFeed);
+        lastDetections = predictions;
+        
+        drawDetections(predictions);
+        updateDetectionStatus(predictions);
+        
+      } catch (error) {
+        console.error('Detection error:', error);
+      }
+
+      if (isAnalyzing) {
+        detectionAnimationFrame = requestAnimationFrame(detectObjects);
+      }
+    }
+
+    // Draw Detection Boxes
+    function drawDetections(predictions) {
+      const canvas = document.getElementById('detection-canvas');
+      const ctx = canvas.getContext('2d');
+      
+      canvas.width = videoFeed.offsetWidth;
+      canvas.height = videoFeed.offsetHeight;
+      
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      const scaleX = canvas.width / videoFeed.videoWidth;
+      const scaleY = canvas.height / videoFeed.videoHeight;
+      
+      predictions.forEach(prediction => {
+        const [x, y, width, height] = prediction.bbox;
+        const scaledX = x * scaleX;
+        const scaledY = y * scaleY;
+        const scaledWidth = width * scaleX;
+        const scaledHeight = height * scaleY;
+        
+        const objInfo = sustainabilityObjects[prediction.class] || {
+          category: 'neutral',
+          impact: 'low',
+          emoji: '📦',
+          label: prediction.class
+        };
+        
+        // Color based on category
+        let color;
+        switch(objInfo.category) {
+          case 'waste':
+            color = '#ef4444'; // Red
+            break;
+          case 'water':
+            color = '#3b82f6'; // Blue
+            break;
+          case 'energy':
+            color = '#eab308'; // Yellow
+            break;
+          case 'positive':
+            color = '#22c55e'; // Green
+            break;
+          default:
+            color = '#94a3b8'; // Gray
+        }
+        
+        // Draw box
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 15;
+        ctx.strokeRect(scaledX, scaledY, scaledWidth, scaledHeight);
+        
+        // Draw corners
+        const cornerLength = 15;
+        ctx.lineWidth = 4;
+        
+        ctx.beginPath();
+        ctx.moveTo(scaledX, scaledY + cornerLength);
+        ctx.lineTo(scaledX, scaledY);
+        ctx.lineTo(scaledX + cornerLength, scaledY);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(scaledX + scaledWidth - cornerLength, scaledY);
+        ctx.lineTo(scaledX + scaledWidth, scaledY);
+        ctx.lineTo(scaledX + scaledWidth, scaledY + cornerLength);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(scaledX, scaledY + scaledHeight - cornerLength);
+        ctx.lineTo(scaledX, scaledY + scaledHeight);
+        ctx.lineTo(scaledX + cornerLength, scaledY + scaledHeight);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(scaledX + scaledWidth - cornerLength, scaledY + scaledHeight);
+        ctx.lineTo(scaledX + scaledWidth, scaledY + scaledHeight);
+        ctx.lineTo(scaledX + scaledWidth, scaledY + scaledHeight - cornerLength);
+        ctx.stroke();
+        
+        // Label
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = color;
+        const labelText = `${objInfo.emoji} ${objInfo.label}`;
+        ctx.font = 'bold 13px Inter, sans-serif';
+        const textWidth = ctx.measureText(labelText).width;
+        
+        ctx.beginPath();
+        const labelY = scaledY > 30 ? scaledY - 26 : scaledY + scaledHeight + 4;
+        ctx.roundRect(scaledX - 4, labelY, textWidth + 10, 24, 4);
+        ctx.fill();
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(labelText, scaledX, labelY + 16);
+        
+        // Confidence
+        const confidence = Math.round(prediction.score * 100);
+        ctx.font = '10px Inter, sans-serif';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.fillText(`${confidence}%`, scaledX + scaledWidth - 35, scaledY + scaledHeight - 8);
+      });
+    }
+
+    // Update Detection Status
+    function updateDetectionStatus(predictions) {
+      if (predictions.length === 0) {
+        detectedObjectsEl.textContent = 'No sustainability-related objects detected';
+        return;
+      }
+
+      const grouped = {};
+      predictions.forEach(pred => {
+        const objInfo = sustainabilityObjects[pred.class];
+        if (objInfo && objInfo.category !== 'neutral') {
+          if (!grouped[objInfo.category]) {
+            grouped[objInfo.category] = [];
+          }
+          grouped[objInfo.category].push(objInfo.label);
+        }
+      });
+
+      let statusText = `Found ${predictions.length} object(s): `;
+      const statusParts = [];
+      
+      if (grouped.waste) {
+        statusParts.push(`🗑️ ${grouped.waste.length} waste item(s)`);
+      }
+      if (grouped.water) {
+        statusParts.push(`💧 ${grouped.water.length} water source(s)`);
+      }
+      if (grouped.energy) {
+        statusParts.push(`⚡ ${grouped.energy.length} energy device(s)`);
+      }
+      
+      detectedObjectsEl.textContent = statusText + (statusParts.length > 0 ? statusParts.join(', ') : 'general objects');
+    }
+
+    // Calculate Impact from Real Detections
+    function calculateImpactFromDetections(predictions) {
+      let wasteCount = 0;
+      let waterCount = 0;
+      let energyCount = 0;
+      let totalImpact = 0;
+
+      predictions.forEach(pred => {
+        const objInfo = sustainabilityObjects[pred.class];
+        if (objInfo) {
+          const impactValue = objInfo.impact === 'high' ? 3 : objInfo.impact === 'medium' ? 2 : 1;
+          
+          if (objInfo.category === 'waste') {
+            wasteCount += impactValue;
+          } else if (objInfo.category === 'water') {
+            waterCount += impactValue;
+          } else if (objInfo.category === 'energy') {
+            energyCount += impactValue;
+          }
+          totalImpact += impactValue;
+        }
+      });
+
+      // Scale the values
+      const waste = Math.min(Math.floor((wasteCount / Math.max(predictions.length, 1)) * 60) + 10, 70);
+      const waterLoss = Math.floor(wasteCount * 50 + waterCount * 100 + 50);
+      const energyWaste = Math.floor(energyCount * 15 + totalImpact * 5 + 10);
+      const co2Impact = Math.floor((wasteCount + energyCount) * 8 + 5);
+
+      return {
+        waste,
+        waterLoss,
+        energyWaste,
+        co2Impact
+      };
+    }
+
+    // Update Analysis Data
+    function updateAnalysisData() {
+      if (lastDetections.length === 0) {
+        return; // Don't update if nothing detected
+      }
+
+      analysisData = calculateImpactFromDetections(lastDetections);
+      
+      const aiResults = document.getElementById('ai-results');
+      aiResults.classList.remove('opacity-50');
+      
+      document.getElementById('waste-percent').textContent = analysisData.waste + '%';
+      document.getElementById('waste-bar').style.width = analysisData.waste + '%';
+      
+      document.getElementById('water-loss').textContent = analysisData.waterLoss + ' L/day';
+      document.getElementById('water-bar').style.width = Math.min(analysisData.waterLoss / 6, 100) + '%';
+      
+      document.getElementById('energy-waste').textContent = analysisData.energyWaste + ' kWh/day';
+      document.getElementById('energy-bar').style.width = analysisData.energyWaste + '%';
+      
+      document.getElementById('co2-impact').textContent = analysisData.co2Impact + ' kg/day';
+      document.getElementById('co2-bar').style.width = analysisData.co2Impact * 2 + '%';
+      
+      document.getElementById('forecast-btn').disabled = false;
+      document.getElementById('optimize-btn').disabled = false;
+      document.getElementById('generate-plan-btn').disabled = false;
+      
+      counters.liters += Math.floor(analysisData.waterLoss * 0.1);
+      counters.kwh += Math.floor(analysisData.energyWaste * 0.08);
+      counters.emissions += Math.floor(analysisData.co2Impact * 0.12);
+      
+      animateCounter(document.getElementById('liters-saved'), counters.liters);
+      animateCounter(document.getElementById('kwh-balanced'), counters.kwh);
+      animateCounter(document.getElementById('emissions-reduced'), counters.emissions);
+    }
+
+    // Animate Counter
+    function animateCounter(element, target, suffix = '') {
+      let current = parseInt(element.textContent) || 0;
+      const increment = (target - current) / 30;
+      let steps = 0;
+      const timer = setInterval(() => {
+        current += increment;
+        steps++;
+        if (steps >= 30) {
+          current = target;
+          clearInterval(timer);
+        }
+        element.textContent = Math.floor(current).toLocaleString('en-IN') + suffix;
+      }, 30);
+    }
+
+    // Start Analysis
+    function startAnalysis() {
+      isAnalyzing = true;
+      cameraContainer.classList.add('scanning');
+      recordingIndicator.classList.add('active');
+      
+      document.getElementById('analyze-text').textContent = '⏹️ Stop Analysis';
+      
+      detectObjects();
+      analysisInterval = setInterval(updateAnalysisData, 3000);
+    }
+
+    // Stop Analysis
+    function stopAnalysis() {
+      isAnalyzing = false;
+      cameraContainer.classList.remove('scanning');
+      recordingIndicator.classList.remove('active');
+      
+      document.getElementById('analyze-text').textContent = '🔍 Start Live Analysis';
+      
+      if (analysisInterval) {
+        clearInterval(analysisInterval);
+        analysisInterval = null;
+      }
+      
+      if (detectionAnimationFrame) {
+        cancelAnimationFrame(detectionAnimationFrame);
+        detectionAnimationFrame = null;
+      }
+    }
+
+    // Event Listeners
+    startCameraBtn.addEventListener('click', startCamera);
+    switchCameraBtn.addEventListener('click', switchCamera);
+    stopCameraBtn.addEventListener('click', stopCamera);
+
+    analyzeBtn.addEventListener('click', () => {
+      if (isAnalyzing) {
+        stopAnalysis();
+      } else {
+        startAnalysis();
+      }
+    });
+
+    // Forecast, Optimize, and Action Plan handlers (keeping original logic)
+    document.getElementById('forecast-btn').addEventListener('click', async () => {
+      const forecastBtn = document.getElementById('forecast-btn');
+      forecastBtn.disabled = true;
+      forecastBtn.textContent = '🔮 Forecasting...';
+      
+      await new Promise(resolve => setTimeout(resolve, 1800));
+      
+      const forecastResults = document.getElementById('forecast-results');
+      forecastResults.classList.remove('opacity-50');
+      
+      const totalRisk = analysisData.waste + (analysisData.waterLoss / 10) + analysisData.energyWaste;
+      let riskLevel, riskEmoji, riskColor;
+      
+      if (totalRisk < 80) {
+        riskLevel = 'Low Risk';
+        riskEmoji = '✅';
+        riskColor = 'bg-green-500';
+      } else if (totalRisk < 120) {
+        riskLevel = 'Moderate Risk';
+        riskEmoji = '⚠️';
+        riskColor = 'bg-yellow-500';
+      } else {
+        riskLevel = 'High Risk';
+        riskEmoji = '🔴';
+        riskColor = 'bg-red-500';
+      }
+      
+      document.getElementById('risk-indicator').textContent = riskEmoji;
+      document.getElementById('risk-indicator').className = `w-16 h-16 rounded-full ${riskColor} flex items-center justify-center text-3xl`;
+      document.getElementById('risk-text').textContent = riskLevel;
+      
+      document.getElementById('waste-forecast').textContent = (analysisData.waste + Math.floor(Math.random() * 10)) + '%';
+      document.getElementById('water-forecast').textContent = Math.floor(analysisData.waterLoss * 1.1) + 'L';
+      document.getElementById('energy-forecast').textContent = Math.floor(analysisData.energyWaste * 1.15) + 'kWh';
+      
+      forecastBtn.textContent = '📈 Run Forecast';
+      forecastBtn.disabled = false;
+    });
+
+    document.getElementById('optimize-btn').addEventListener('click', async () => {
+      const optimizeBtn = document.getElementById('optimize-btn');
+      optimizeBtn.disabled = true;
+      optimizeBtn.textContent = '⏳ Optimizing...';
+      
+      await new Promise(resolve => setTimeout(resolve, 1800));
+      
+      document.getElementById('optimization-results').classList.remove('opacity-50');
+      
+      const waterOpts = [
+        `Install smart taps - Save ${Math.floor(analysisData.waterLoss * 0.4)}L daily`,
+        `Fix detected leakage points`,
+        'Rainwater harvesting for garden use'
+      ];
+      
+      const energyOpts = [
+        `Switch to LED lights - Save ${Math.floor(analysisData.energyWaste * 0.3)}kWh daily`,
+        'Install motion sensors in low-traffic areas',
+        'Optimize AC schedules using occupancy patterns'
+      ];
+      
+      const wasteOpts = [
+        `Set up segregation points`,
+        'Implement composting for organic waste',
+        'Partner with local recyclers'
+      ];
+      
+      document.getElementById('opt-water').innerHTML = `<span class="text-blue-400 text-2xl">💧</span><span class="text-slate-300 text-sm">${waterOpts[0]}</span>`;
+      document.getElementById('opt-energy').innerHTML = `<span class="text-yellow-400 text-2xl">⚡</span><span class="text-slate-300 text-sm">${energyOpts[0]}</span>`;
+      document.getElementById('opt-waste').innerHTML = `<span class="text-red-400 text-2xl">🗑️</span><span class="text-slate-300 text-sm">${wasteOpts[0]}</span>`;
+      
+      optimizeBtn.textContent = '🎯 Optimize with AI';
+      optimizeBtn.disabled = false;
+    });
+
+    document.getElementById('generate-plan-btn').addEventListener('click', async () => {
+      const generatePlanBtn = document.getElementById('generate-plan-btn');
+      generatePlanBtn.disabled = true;
+      generatePlanBtn.textContent = '⏳ Generating...';
+      
+      const locationType = document.getElementById('location-type').value;
+      const actionPlanContent = document.getElementById('action-plan-content');
+      
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      const locationNames = { school: 'School', ward: 'Ward/Colony', office: 'Office Complex' };
+      const plans = {
+        school: [
+          { time: '06:00', icon: '🌅', action: 'AI activates solar panels and optimizes water pump' },
+          { time: '07:30', icon: '🚰', action: `Smart leakage check (Save: ${Math.floor(analysisData.waterLoss * 0.2)}L)` },
+          { time: '08:00', icon: '💡', action: 'Classroom lights auto-adjust to natural light' },
+          { time: '10:30', icon: '🗑️', action: 'AI-guided waste segregation reminder' }
+        ],
+        ward: [
+          { time: '05:00', icon: '🌅', action: 'Smart streetlights dim as sunrise approaches' },
+          { time: '06:00', icon: '🗑️', action: `Waste collection routes optimized` },
+          { time: '08:00', icon: '💧', action: 'Community water tank levels monitored' }
+        ],
+        office: [
+          { time: '06:00', icon: '🌅', action: 'Pre-cool building using off-peak electricity' },
+          { time: '08:30', icon: '💡', action: 'Floor-by-floor lighting based on occupancy' },
+          { time: '14:00', icon: '❄️', action: `AC optimization saves ${Math.floor(analysisData.energyWaste * 0.25)}kWh` }
+        ]
+      };
+      
+      const selectedPlan = plans[locationType];
+      let planHTML = `<div class="mb-5 pb-4 border-b border-slate-600">
+        <h3 class="text-blue-300 font-bold text-xl">📋 Daily Action Plan for ${locationNames[locationType]}</h3>
+      </div><div class="space-y-3">`;
+      
+      selectedPlan.forEach(item => {
+        planHTML += `<div class="flex items-start gap-4 p-3 bg-slate-800/40 rounded-xl border-l-4 border-blue-500/40">
+          <div class="text-xs text-blue-400 font-bold min-w-[55px] bg-blue-500/20 px-2 py-1 rounded-lg">${item.time}</div>
+          <div class="text-2xl">${item.icon}</div>
+          <div class="text-slate-200 text-sm flex-1">${item.action}</div>
+        </div>`;
+      });
+      
+      planHTML += `</div>`;
+      actionPlanContent.innerHTML = planHTML;
+      
+      generatePlanBtn.textContent = '✨ Regenerate Plan';
+      generatePlanBtn.disabled = false;
+    });
+
+    // Initialize
+    loadModel();
+
+    window.addEventListener('beforeunload', () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    });
+  </script>
+ </body>
+</html>
